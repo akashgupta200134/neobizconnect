@@ -3,9 +3,10 @@ import { useAuthStore } from "@/store/auth.store";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { Text as SkiaText, useFont } from "@shopify/react-native-skia";
 import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BarGroup, CartesianChart } from "victory-native";
@@ -49,6 +50,20 @@ const EmptyChartState = ({ icon = "bar-chart-2" }: { icon?: string }) => (
     </View>
 );
 
+// Helper to calculate dynamic initial filters
+const getInitialFilters = () => {
+    const today = new Date();
+    const currentMonth = format(today, "MMMM");
+    const year = today.getFullYear();
+    const isJanToMar = today.getMonth() < 3; // 0 = Jan, 1 = Feb, 2 = Mar
+    const currentFY = isJanToMar ? `${year - 1}-${year}` : `${year}-${year + 1}`;
+
+    return {
+        financial_year: currentFY,
+        month: currentMonth,
+    };
+};
+
 export const DashboardScreen = () => {
     const [animatedChartData, setAnimatedChartData] = useState<any[]>([]);
     const user = useAuthStore((state) => state.user);
@@ -57,20 +72,14 @@ export const DashboardScreen = () => {
 
     const font = useFont(require("../../../../assets/fonts/Geist/static/Geist-Regular.ttf"), 10);
 
-    // Initialize with empty strings to fetch without filters on the first load
-    const [filters, setFilters] = useState({
-        financial_year: "",
-        month: "",
-    });
-
+    const [filters, setFilters] = useState(getInitialFilters());
     const [isFilterVisible, setFilterVisible] = useState(false);
     const [tempFilters, setTempFilters] = useState(filters);
 
-    const { data, isLoading } = useQuery({
+    const { data, isLoading, isRefetching, refetch } = useQuery({
         queryKey: ["dashboard", groupCompanyName, filters],
         queryFn: () => fetchDashboardData(groupCompanyName, filters),
-        enabled: Boolean(groupCompanyName),
-        refetchInterval: 10000
+        enabled: Boolean(groupCompanyName)
     });
 
     React.useEffect(() => {
@@ -181,8 +190,18 @@ export const DashboardScreen = () => {
 
     return (
         <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
+            <ScrollView 
+                contentContainerStyle={styles.scrollContent} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl 
+                        refreshing={isRefetching} 
+                        onRefresh={refetch} 
+                        colors={[colors.primary]} 
+                        tintColor={colors.primary}
+                    />
+                }
+            >
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.headerTitle}>Dashboard</Text>
@@ -224,7 +243,7 @@ export const DashboardScreen = () => {
                         <EmptyChartState icon="bar-chart-2" />
                     ) : (
                         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                            <View style={{ height: 300, width: 650 }}>
+                            <View style={{ height: 300, width: Math.max(350, animatedChartData.length * 55) }}>
                                 <CartesianChart
                                     data={animatedChartData}
                                     xKey="month"
@@ -232,7 +251,7 @@ export const DashboardScreen = () => {
                                     domainPadding={{ left: 30, right: 30, top: 40 }}
                                     axisOptions={{
                                         font,
-                                        tickCount: 6,
+                                        tickCount: 12, // Force render all 12 ticks/months
                                         lineColor: colors.border,
                                         labelColor: colors.textSecondary,
                                         formatYLabel: (val) => `${val}`,
@@ -423,7 +442,7 @@ const styles = StyleSheet.create({
 
     barCellContainer: { height: 24, justifyContent: "center", position: "relative" },
     tableBackgroundBar: { position: "absolute", left: 0, top: 0, bottom: 0, borderRadius: 2, opacity: 0.8 },
-    barValueText: { fontSize: 11, fontFamily: typography.bold, color: colors.white, textAlign: "center", zIndex: 1, textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+    barValueText: { fontSize: 11, fontFamily: typography.bold, color: colors.black, textAlign: "center", zIndex: 1, textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: colors.white, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, maxHeight: '80%' },
