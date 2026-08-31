@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/auth.store";
 import { LegendList } from "@legendapp/list/react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { format, isValid } from "date-fns";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -17,7 +18,6 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 
 export default function ArInvoiceScreen() {
   const user = useAuthStore((state) => state.user);
@@ -54,8 +54,18 @@ export default function ArInvoiceScreen() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "-";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-GB");
+    
+    // Attempt standard parsing first
+    let date = new Date(dateString);
+    
+    // Fallback for React Native Android (Hermes) which fails on " AM/PM" strings
+    // This safely isolates just the date portion ("8/31/2026" or "2026-08-31")
+    if (!isValid(date)) {
+        const cleanDateString = dateString.split(" ")[0]; 
+        date = new Date(cleanDateString);
+    }
+
+    return isValid(date) ? format(date, "dd/MM/yyyy") : "-";
   };
 
   const renderCard = ({ item }: { item: ArInvoiceDocument }) => {
@@ -66,7 +76,7 @@ export default function ArInvoiceScreen() {
         <View style={styles.cardHeader}>
           <View>
             <Text style={styles.docNo}>Invoice #{item.invoice_number}</Text>
-            <Text style={styles.docDate}>{formatDate(item.document_date)}</Text>
+            <Text style={styles.docDate}>{item.document_date}</Text>
           </View>
           <View style={[styles.statusBadge, item.invoice_status === "Closed" && styles.statusClosed]}>
             <Text style={[styles.statusBadgeText, item.invoice_status === "Closed" && styles.statusTextClosed]}>
@@ -213,7 +223,7 @@ export default function ArInvoiceScreen() {
                 </View>
                 <View style={[styles.modalSummaryCard, { backgroundColor: "#F0FDF4" }]}>
                   <Text style={styles.modalSummaryLabel}>Posting Date</Text>
-                  <Text style={styles.modalSummaryMain}>{formatDate(selectedDetails.posting_date)}</Text>
+                  <Text style={styles.modalSummaryMain}>{selectedDetails.posting_date}</Text>
                 </View>
               </View>
 
@@ -266,7 +276,7 @@ export default function ArInvoiceScreen() {
                   </View>
                   <View style={styles.infoGridCol}>
                     <Text style={styles.infoLabel}>Ack Date</Text>
-                    <Text style={styles.infoValue}>{formatDate(selectedDetails.ack_date)}</Text>
+                    <Text style={styles.infoValue}>{selectedDetails.ack_date}</Text>
                   </View>
                 </View>
 
@@ -341,11 +351,11 @@ export default function ArInvoiceScreen() {
                 </View>
                 <View style={styles.lrField}>
                   <Text style={styles.infoLabel}>Invoice Date</Text>
-                  <Text style={styles.infoValue}>{formatDate(selectedLr.document_date)}</Text>
+                  <Text style={styles.infoValue}>{selectedLr.document_date}</Text>
                 </View>
                 <View style={styles.lrField}>
                   <Text style={styles.infoLabel}>Date of Dispatch</Text>
-                  <Text style={styles.infoValue}>{formatDate(selectedLr.lr_date)}</Text>
+                  <Text style={styles.infoValue}>{selectedLr.lr_date}</Text>
                 </View>
                 <View style={styles.lrField}>
                   <Text style={styles.infoLabel}>Service Provider</Text>
