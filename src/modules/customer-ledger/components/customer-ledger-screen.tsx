@@ -72,7 +72,7 @@ export default function CustomerLedgerScreen() {
 
   const formatCurrency = (val: string | number) => {
     const num = typeof val === "string" ? parseFloat(val) : val;
-    if (isNaN(num)) return "0.00";
+    if (isNaN(num) || num === null) return "0.00";
     return num.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
@@ -171,11 +171,9 @@ export default function CustomerLedgerScreen() {
       <View style={styles.header}>
         {/* Top Row: Back, Title, Calendar Icon */}
         <View style={styles.headerTopRow}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Feather name="arrow-left" size={24} color={colors.text} />
-          </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={styles.headerTitle}>Customer Ledger</Text>
+            <Text style={styles.headerSubTitle}>Here is a list of customers ledgers</Text>
           </View>
           <TouchableOpacity style={styles.calendarBtn} onPress={() => setFilterModalVisible(true)}>
             <Feather name="calendar" size={20} color={colors.text} />
@@ -294,8 +292,9 @@ const styles = StyleSheet.create({
   header: { padding: spacing.md, backgroundColor: colors.white, borderBottomWidth: 1, borderBottomColor: colors.border },
   headerTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
   backButton: { padding: 4, marginLeft: -4 },
-  headerTitleContainer: { flex: 1, alignItems: "center" },
-  headerTitle: { fontSize: 18, fontFamily: typography.bold, color: colors.text },
+  headerTitleContainer: { alignItems: "flex-start", justifyContent: "center" },
+  headerTitle: { fontSize: 20, fontFamily: typography.bold, color: colors.text, paddingBottom: 2 },
+  headerSubTitle: { fontSize: txtSize.small, fontFamily: typography.medium, color: colors.textSecondary },
   calendarBtn: { padding: 8, backgroundColor: colors.surface, borderRadius: radius.md, position: "relative" },
   activeFilterDot: { position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error, borderWidth: 1, borderColor: colors.surface },
 

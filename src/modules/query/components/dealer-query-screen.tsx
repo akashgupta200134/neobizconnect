@@ -40,12 +40,15 @@ export const DealerQueryScreen = () => {
     const queryClient = useQueryClient();
     const user = useAuthStore((state) => state.user);
     const groupCompanyName = user?.group_company_name || "Neo";
+    
+    // Check role/authority to conditionally render inputs
+    const isDealer = user?.authority === "Dealer";
 
     const [activeTab, setActiveTab] = useState<"list" | "create">("list");
     const [editingQuery, setEditingQuery] = useState<DealerQuery | null>(null);
 
     // --- Data Fetching ---
-    const { data: queries = [], isLoading, isRefetching, refetch } = useQuery({
+    const { data: queries, isLoading, isRefetching, refetch } = useQuery({
         queryKey: ["dealer-queries", groupCompanyName],
         queryFn: () => fetchDealerQueries(groupCompanyName),
         enabled: Boolean(groupCompanyName),
@@ -80,7 +83,7 @@ export const DealerQueryScreen = () => {
     // --- Forms ---
     const createForm = useForm<FormValues>({
         resolver: zodResolver(formSchema),
-        defaultValues: { subject: "", query: "", remarks: "", status: "Open" },
+        defaultValues: { subject: "", query: "", remarks: "", status: "Open" }, // Defaulted to Open for new queries
     });
 
     const editForm = useForm<FormValues>({
@@ -157,10 +160,8 @@ export const DealerQueryScreen = () => {
         <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                    <Feather name="arrow-left" size={24} color={colors.text} />
-                </TouchableOpacity>
                 <Text style={styles.headerTitle}>Dealer Queries</Text>
+                <Text style={styles.headerSubTitle}>Here is a list of dealer queries</Text>
             </View>
 
             {/* Tabs */}
@@ -188,7 +189,7 @@ export const DealerQueryScreen = () => {
                     <View style={styles.centerBox}>
                         <ActivityIndicator size="large" color={colors.primary} />
                     </View>
-                ) : queries.length === 0 ? (
+                ) : queries?.length === 0 ? (
                     <View style={styles.centerBox}>
                         <Feather name="message-square" size={48} color={colors.muted} />
                         <Text style={styles.emptyTitle}>No queries found</Text>
@@ -247,6 +248,50 @@ export const DealerQueryScreen = () => {
                         )}
                     />
 
+                    {!isDealer && (
+                        <>
+                            <Controller
+                                control={createForm.control}
+                                name="remarks"
+                                render={({ field: { onChange, value } }) => (
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Remarks</Text>
+                                        <TextInput 
+                                            style={[styles.input, styles.textArea]} 
+                                            placeholder="Enter remarks"
+                                            placeholderTextColor={colors.muted}
+                                            multiline 
+                                            textAlignVertical="top" 
+                                            value={value} 
+                                            onChangeText={onChange} 
+                                        />
+                                    </View>
+                                )}
+                            />
+
+                            <Controller
+                                control={createForm.control}
+                                name="status"
+                                render={({ field: { onChange, value } }) => (
+                                    <View style={styles.inputGroup}>
+                                        <Text style={styles.inputLabel}>Status</Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusChipContainer}>
+                                            {STATUS_OPTIONS.map((status) => (
+                                                <TouchableOpacity
+                                                    key={status}
+                                                    style={[styles.statusChip, value === status && styles.statusChipActive]}
+                                                    onPress={() => onChange(status)}
+                                                >
+                                                    <Text style={[styles.statusChipText, value === status && styles.statusChipTextActive]}>{status}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    </View>
+                                )}
+                            />
+                        </>
+                    )}
+
                     <TouchableOpacity
                         style={[styles.submitBtn, createMutation.isPending && styles.submitBtnDisabled]}
                         onPress={createForm.handleSubmit(onCreateSubmit)}
@@ -294,37 +339,41 @@ export const DealerQueryScreen = () => {
                             )}
                         />
 
-                        <Controller
-                            control={editForm.control}
-                            name="remarks"
-                            render={({ field: { onChange, value } }) => (
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Remarks</Text>
-                                    <TextInput style={[styles.input, styles.textArea]} multiline textAlignVertical="top" value={value} onChangeText={onChange} />
-                                </View>
-                            )}
-                        />
+                        {!isDealer && (
+                            <>
+                                <Controller
+                                    control={editForm.control}
+                                    name="remarks"
+                                    render={({ field: { onChange, value } }) => (
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>Remarks</Text>
+                                            <TextInput style={[styles.input, styles.textArea]} multiline textAlignVertical="top" value={value} onChangeText={onChange} />
+                                        </View>
+                                    )}
+                                />
 
-                        <Controller
-                            control={editForm.control}
-                            name="status"
-                            render={({ field: { onChange, value } }) => (
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Status</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusChipContainer}>
-                                        {STATUS_OPTIONS.map((status) => (
-                                            <TouchableOpacity
-                                                key={status}
-                                                style={[styles.statusChip, value === status && styles.statusChipActive]}
-                                                onPress={() => onChange(status)}
-                                            >
-                                                <Text style={[styles.statusChipText, value === status && styles.statusChipTextActive]}>{status}</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
-                                </View>
-                            )}
-                        />
+                                <Controller
+                                    control={editForm.control}
+                                    name="status"
+                                    render={({ field: { onChange, value } }) => (
+                                        <View style={styles.inputGroup}>
+                                            <Text style={styles.inputLabel}>Status</Text>
+                                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statusChipContainer}>
+                                                {STATUS_OPTIONS.map((status) => (
+                                                    <TouchableOpacity
+                                                        key={status}
+                                                        style={[styles.statusChip, value === status && styles.statusChipActive]}
+                                                        onPress={() => onChange(status)}
+                                                    >
+                                                        <Text style={[styles.statusChipText, value === status && styles.statusChipTextActive]}>{status}</Text>
+                                                    </TouchableOpacity>
+                                                ))}
+                                            </ScrollView>
+                                        </View>
+                                    )}
+                                />
+                            </>
+                        )}
 
                         <TouchableOpacity
                             style={[styles.submitBtn, updateMutation.isPending && styles.submitBtnDisabled]}
@@ -340,7 +389,6 @@ export const DealerQueryScreen = () => {
                     </ScrollView>
                 </SafeAreaView>
             </Modal>
-
         </SafeAreaView>
     );
 };
@@ -348,10 +396,10 @@ export const DealerQueryScreen = () => {
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: colors.surface },
     centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: { flexDirection: "row", alignItems: "center", padding: spacing.md, backgroundColor: colors.white },
+    header: { flexDirection: "column", alignItems: "flex-start", justifyContent:"center", padding: spacing.md, backgroundColor: colors.white },
     backButton: { padding: 4, marginRight: spacing.sm },
-    headerTitle: { fontSize: 20, fontFamily: typography.bold, color: colors.text },
-
+    headerTitle: { fontSize: 20, fontFamily: typography.bold, color: colors.text,paddingBottom:2 },
+    headerSubTitle: { fontSize: txtSize.small, fontFamily: typography.medium, color: colors.textSecondary },
     tabContainer: { flexDirection: "row", backgroundColor: colors.surface, padding: spacing.sm, marginHorizontal: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm },
     tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, borderRadius: radius.sm },
     tabBtnActive: { backgroundColor: colors.white, shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
@@ -383,7 +431,7 @@ const styles = StyleSheet.create({
     textArea: { height: 120 },
     errorText: { color: colors.error, fontSize: 11, fontFamily: typography.medium, marginTop: 4 },
 
-    submitBtn: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: radius.sm, alignItems: "center", marginTop: spacing.md },
+    submitBtn: { backgroundColor: colors.primary, paddingVertical: 10, borderRadius: radius.sm, alignItems: "center", marginTop: spacing.md },
     submitBtnDisabled: { opacity: 0.7 },
     submitBtnText: { color: colors.white, fontSize: 16, fontFamily: typography.bold },
 

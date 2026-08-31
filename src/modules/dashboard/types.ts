@@ -1,17 +1,18 @@
 export type TargetVsAchievement = {
+  year: string;
   month: string;
-  quantity: number;
+  achieved_quantity: number;
   target_quantity: number;
 };
 
 export type TopSellingDesign = {
   design: string;
-  quantity: number;
+  total_quantity: number;
 };
 
 export type TopSellingSku = {
   item_description: string;
-  quantity: number;
+  total_quantity: number;
 };
 
 export type SalesMix = {

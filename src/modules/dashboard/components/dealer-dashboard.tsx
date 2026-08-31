@@ -13,7 +13,7 @@ import { fetchDashboardData } from "../services/dashboard.api";
 
 const BAR_COLORS = ["#60A5FA", "#34D399", "#FB923C", "#A78BFA", "#38BDF8", "#F472B6", "#2DD4BF"];
 const MONTHS = ["April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"];
-const YEARS = ["2024-25", "2025-26", "2026-27"];
+const YEARS = ["2024-2025", "2025-2026", "2026-2027"];
 
 const formatNumber = (num: number) => {
     return num?.toLocaleString("en-IN") || "0";
@@ -42,6 +42,13 @@ const AnimatedBarCell = ({ targetPercent, barColor, text, index, flexValue, marg
     );
 };
 
+const EmptyChartState = ({ icon = "bar-chart-2" }: { icon?: string }) => (
+    <View style={styles.emptyStateContainer}>
+        <Feather name={icon as any} size={32} color={colors.surface} />
+        <Text style={styles.emptyStateText}>No data available</Text>
+    </View>
+);
+
 export const DashboardScreen = () => {
     const [animatedChartData, setAnimatedChartData] = useState<any[]>([]);
     const user = useAuthStore((state) => state.user);
@@ -50,9 +57,10 @@ export const DashboardScreen = () => {
 
     const font = useFont(require("../../../../assets/fonts/Geist/static/Geist-Regular.ttf"), 10);
 
+    // Initialize with empty strings to fetch without filters on the first load
     const [filters, setFilters] = useState({
-        financial_year: "2026-27",
-        month: "August",
+        financial_year: "",
+        month: "",
     });
 
     const [isFilterVisible, setFilterVisible] = useState(false);
@@ -66,24 +74,37 @@ export const DashboardScreen = () => {
     });
 
     React.useEffect(() => {
-        if (data?.target_vs_achievement) {
-            // 1. Initialize the chart with the correct months but 0 quantities
+        if (data?.target_vs_achievement && data.target_vs_achievement.length > 0) {
             setAnimatedChartData(
-                data.target_vs_achievement.map(d => ({ ...d, quantity: 0, target_quantity: 0 }))
+                data.target_vs_achievement.map((d: any) => ({ ...d, achieved_quantity: 0, target_quantity: 0 }))
             );
 
-            // 2. Trigger the state change 100ms later to force the animation to run
             const timer = setTimeout(() => {
                 setAnimatedChartData(data.target_vs_achievement);
             }, 100);
 
             return () => clearTimeout(timer);
+        } else {
+            setAnimatedChartData([]);
         }
     }, [data]);
 
     const applyFilters = () => {
         setFilters(tempFilters);
         setFilterVisible(false);
+    };
+
+    const resetFilters = () => {
+        const emptyFilters = { financial_year: "", month: "" };
+        setTempFilters(emptyFilters);
+        setFilters(emptyFilters);
+        setFilterVisible(false);
+    };
+
+    const getSubtitle = () => {
+        if (!filters.month && !filters.financial_year) return "All Time";
+        if (filters.month && filters.financial_year) return `${filters.month} | ${filters.financial_year}`;
+        return filters.month || filters.financial_year;
     };
 
     if (isLoading || !data || !font) {
@@ -103,53 +124,57 @@ export const DashboardScreen = () => {
         </View>
     );
 
-    const BarListTable = ({ title, data, labelKey, valueKey, percentKey }: any) => {
-        if (!data || data.length === 0) return null;
-        const maxValue = Math.max(...data.map((d: any) => d[valueKey]));
-
+    const BarListTable = ({ title, data, labelKey, valueKey, percentKey, icon = "pie-chart" }: any) => {
         return (
             <View style={styles.chartCard}>
                 <View style={styles.chartHeader}>
                     <Text style={styles.chartTitle}>{title}</Text>
                 </View>
 
-                <View style={styles.tableHeaderRow}>
-                    <Text style={[styles.tableHeaderText, { flex: 2 }]}>{labelKey.replace(/_/g, ' ').toUpperCase()}</Text>
-                    <Text style={[styles.tableHeaderText, { flex: 1, textAlign: "right" }]}>SUM(QTY)</Text>
-                    {percentKey && <Text style={[styles.tableHeaderText, { flex: 1, textAlign: "right" }]}>% MIX</Text>}
-                </View>
-
-                {data.map((item: any, index: number) => {
-                    const widthPercent = maxValue === 0 ? 0 : (item[valueKey] / maxValue) * 100;
-                    const barColor = BAR_COLORS[index % BAR_COLORS.length];
-
-                    return (
-                        <View key={index} style={styles.tableRow}>
-                            <Text style={[styles.tableCellText, { flex: 2 }]} numberOfLines={1}>
-                                {item[labelKey]}
-                            </Text>
-
-                            <AnimatedBarCell
-                                targetPercent={widthPercent}
-                                barColor={barColor}
-                                text={formatNumber(item[valueKey])}
-                                index={index}
-                                flexValue={percentKey ? 1 : 1.5}
-                            />
-
-                            {percentKey && (
-                                <AnimatedBarCell
-                                    targetPercent={item[percentKey]}
-                                    barColor={barColor}
-                                    text={`${item[percentKey]}%`}
-                                    index={index}
-                                    flexValue={1}
-                                    marginLeft={8}
-                                />
-                            )}
+                {!data || data.length === 0 ? (
+                    <EmptyChartState icon={icon} />
+                ) : (
+                    <>
+                        <View style={styles.tableHeaderRow}>
+                            <Text style={[styles.tableHeaderText, { flex: 2 }]}>{labelKey.replace(/_/g, ' ').toUpperCase()}</Text>
+                            <Text style={[styles.tableHeaderText, { flex: 1, textAlign: "right" }]}>SUM(QTY)</Text>
+                            {percentKey && <Text style={[styles.tableHeaderText, { flex: 1, textAlign: "right" }]}>% MIX</Text>}
                         </View>
-                    );
-                })}
+
+                        {data.map((item: any, index: number) => {
+                            const maxValue = Math.max(...data.map((d: any) => d[valueKey]));
+                            const widthPercent = maxValue === 0 ? 0 : (item[valueKey] / maxValue) * 100;
+                            const barColor = BAR_COLORS[index % BAR_COLORS.length];
+
+                            return (
+                                <View key={index} style={styles.tableRow}>
+                                    <Text style={[styles.tableCellText, { flex: 2 }]} numberOfLines={1}>
+                                        {item[labelKey]}
+                                    </Text>
+
+                                    <AnimatedBarCell
+                                        targetPercent={widthPercent}
+                                        barColor={barColor}
+                                        text={formatNumber(item[valueKey])}
+                                        index={index}
+                                        flexValue={percentKey ? 1 : 1.5}
+                                    />
+
+                                    {percentKey && (
+                                        <AnimatedBarCell
+                                            targetPercent={item[percentKey]}
+                                            barColor={barColor}
+                                            text={`${item[percentKey]}%`}
+                                            index={index}
+                                            flexValue={1}
+                                            marginLeft={8}
+                                        />
+                                    )}
+                                </View>
+                            );
+                        })}
+                    </>
+                )}
             </View>
         );
     };
@@ -161,10 +186,10 @@ export const DashboardScreen = () => {
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.headerTitle}>Dashboard</Text>
-                        <Text style={styles.headerSubtitle}>{filters.month} | {filters.financial_year}</Text>
+                        <Text style={styles.headerSubtitle}>{getSubtitle()}</Text>
                     </View>
                     <View style={styles.headerActions}>
-                        <TouchableOpacity onPress={() => setFilterVisible(true)} style={styles.headerBtn}>
+                        <TouchableOpacity onPress={() => { setTempFilters(filters); setFilterVisible(true); }} style={styles.headerBtn}>
                             <Feather name="filter" size={16} color={colors.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push("/profile")} style={styles.headerBtn}>
@@ -173,7 +198,6 @@ export const DashboardScreen = () => {
                     </View>
                 </View>
 
-                {/* KPI Grid */}
                 <View style={styles.kpiGrid}>
                     <KPICard title="Total Pending Qty" value={data.total_pending_quantity} />
                     <KPICard title="Total PI/OIP Qty" value={data.total_pi_oip_quantity} />
@@ -185,7 +209,6 @@ export const DashboardScreen = () => {
                     <KPICard title="Credit Limit (₹)" value={data.credit_limit} isCurrency />
                 </View>
 
-                {/* Victory Native Grouped Bar Chart */}
                 <View style={styles.chartCard}>
                     <View style={styles.chartHeader}>
                         <Text style={styles.chartTitle}>Target vs Achievement</Text>
@@ -197,99 +220,102 @@ export const DashboardScreen = () => {
                         </View>
                     </View>
 
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                        <View style={{ height: 300, width: 650 }}>
-                            <CartesianChart
-                                data={animatedChartData}
-                                xKey="month"
-                                yKeys={["quantity", "target_quantity"]}
-                                domainPadding={{ left: 30, right: 30, top: 40 }}
-                                axisOptions={{
-                                    font,
-                                    tickCount: 6,
-                                    lineColor: colors.border,
-                                    labelColor: colors.textSecondary,
-                                    formatYLabel: (val) => `${val}`,
-                                }}
-                            >
-                                {({ points, chartBounds }) => {
-                                    const barOffset = 10;
+                    {animatedChartData.length === 0 ? (
+                        <EmptyChartState icon="bar-chart-2" />
+                    ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                            <View style={{ height: 300, width: 650 }}>
+                                <CartesianChart
+                                    data={animatedChartData}
+                                    xKey="month"
+                                    yKeys={["achieved_quantity", "target_quantity"]}
+                                    domainPadding={{ left: 30, right: 30, top: 40 }}
+                                    axisOptions={{
+                                        font,
+                                        tickCount: 6,
+                                        lineColor: colors.border,
+                                        labelColor: colors.textSecondary,
+                                        formatYLabel: (val) => `${val}`,
+                                    }}
+                                >
+                                    {({ points, chartBounds }) => {
+                                        const barOffset = 10;
 
-                                    return (
-                                        <>
-                                            <BarGroup
-                                                chartBounds={chartBounds}
-                                                betweenGroupPadding={0.3}
-                                                withinGroupPadding={0.1}
-                                            >
-                                                <BarGroup.Bar
-                                                    points={points.quantity}
-                                                    color="#F97316"
-                                                    animate={{ type: "timing", duration: 600 }}
-                                                />
-                                                <BarGroup.Bar
-                                                    points={points.target_quantity}
-                                                    color="#3B82F6"
-                                                    animate={{ type: "timing", duration: 600 }}
-                                                />
-                                            </BarGroup>
-
-                                            {/* Quantity Labels */}
-                                            {points.quantity.map((p, i) => {
-                                                if (typeof p.y !== "number" || typeof p.yValue !== "number") return null;
-
-                                                const valStr = p.yValue.toString();
-                                                const textWidth = font.measureText(valStr).width;
-                                                return (
-                                                    <SkiaText
-                                                        key={`qty-${i}`}
-                                                        x={p.x - barOffset - (textWidth / 2)}
-                                                        y={p.y - 8}
-                                                        text={valStr}
-                                                        font={font}
-                                                        color={colors.textSecondary}
+                                        return (
+                                            <>
+                                                <BarGroup
+                                                    chartBounds={chartBounds}
+                                                    betweenGroupPadding={0.3}
+                                                    withinGroupPadding={0.1}
+                                                >
+                                                    <BarGroup.Bar
+                                                        points={points.achieved_quantity}
+                                                        color="#F97316"
+                                                        animate={{ type: "timing", duration: 600 }}
                                                     />
-                                                );
-                                            })}
-
-                                            {/* Target Labels */}
-                                            {points.target_quantity.map((p, i) => {
-                                                if (typeof p.y !== "number" || typeof p.yValue !== "number") return null;
-
-                                                const valStr = p.yValue.toString();
-                                                const textWidth = font.measureText(valStr).width;
-                                                return (
-                                                    <SkiaText
-                                                        key={`tgt-${i}`}
-                                                        x={p.x + barOffset - (textWidth / 2)}
-                                                        y={p.y - 8}
-                                                        text={valStr}
-                                                        font={font}
-                                                        color={colors.textSecondary}
+                                                    <BarGroup.Bar
+                                                        points={points.target_quantity}
+                                                        color="#3B82F6"
+                                                        animate={{ type: "timing", duration: 600 }}
                                                     />
-                                                );
-                                            })}
-                                        </>
-                                    );
-                                }}
-                            </CartesianChart>
-                        </View>
-                    </ScrollView>
+                                                </BarGroup>
+
+                                                {points.achieved_quantity.map((p, i) => {
+                                                    if (typeof p.y !== "number" || typeof p.yValue !== "number") return null;
+
+                                                    const valStr = p.yValue.toString();
+                                                    const textWidth = font.measureText(valStr).width;
+                                                    return (
+                                                        <SkiaText
+                                                            key={`qty-${i}`}
+                                                            x={p.x - barOffset - (textWidth / 2)}
+                                                            y={p.y - 8}
+                                                            text={valStr}
+                                                            font={font}
+                                                            color={colors.textSecondary}
+                                                        />
+                                                    );
+                                                })}
+
+                                                {points.target_quantity.map((p, i) => {
+                                                    if (typeof p.y !== "number" || typeof p.yValue !== "number") return null;
+
+                                                    const valStr = p.yValue.toString();
+                                                    const textWidth = font.measureText(valStr).width;
+                                                    return (
+                                                        <SkiaText
+                                                            key={`tgt-${i}`}
+                                                            x={p.x + barOffset - (textWidth / 2)}
+                                                            y={p.y - 8}
+                                                            text={valStr}
+                                                            font={font}
+                                                            color={colors.textSecondary}
+                                                        />
+                                                    );
+                                                })}
+                                            </>
+                                        );
+                                    }}
+                                </CartesianChart>
+                            </View>
+                        </ScrollView>
+                    )}
                 </View>
 
-                {/* List Bar Charts */}
                 <BarListTable
                     title="Top Selling Design"
                     data={data.top_selling_design}
                     labelKey="design"
-                    valueKey="quantity"
+                    valueKey="total_quantity"
+                    icon="layers"
                 />
 
                 <BarListTable
                     title="Top Selling SKU's"
                     data={data.top_selling_sku}
                     labelKey="item_description"
-                    valueKey="quantity"
+                    valueKey="total_quantity"
+                    icon="box"
                 />
 
                 <BarListTable
@@ -298,12 +324,12 @@ export const DashboardScreen = () => {
                     labelKey="wheel_size"
                     valueKey="total_quantity"
                     percentKey="sales_mix_percentage"
+                    icon="pie-chart"
                 />
 
             </ScrollView>
 
-            {/* Filter Modal */}
-            <Modal visible={isFilterVisible} animationType="slide" transparent={true} backdropColor={"transparent"} >
+            <Modal visible={isFilterVisible} animationType="slide" transparent={true} backdropColor={"transparent"}>
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
                         <View style={styles.modalHeader}>
@@ -319,7 +345,10 @@ export const DashboardScreen = () => {
                                 <TouchableOpacity
                                     key={year}
                                     style={[styles.chip, tempFilters.financial_year === year && styles.chipActive]}
-                                    onPress={() => setTempFilters({ ...tempFilters, financial_year: year })}
+                                    onPress={() => setTempFilters(prev => ({ 
+                                        ...prev, 
+                                        financial_year: prev.financial_year === year ? "" : year 
+                                    }))}
                                 >
                                     <Text style={[styles.chipText, tempFilters.financial_year === year && styles.chipTextActive]}>
                                         {year}
@@ -334,7 +363,10 @@ export const DashboardScreen = () => {
                                 <TouchableOpacity
                                     key={month}
                                     style={[styles.chip, tempFilters.month === month && styles.chipActive]}
-                                    onPress={() => setTempFilters({ ...tempFilters, month })}
+                                    onPress={() => setTempFilters(prev => ({ 
+                                        ...prev, 
+                                        month: prev.month === month ? "" : month 
+                                    }))}
                                 >
                                     <Text style={[styles.chipText, tempFilters.month === month && styles.chipTextActive]}>
                                         {month}
@@ -343,9 +375,14 @@ export const DashboardScreen = () => {
                             ))}
                         </View>
 
-                        <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
-                            <Text style={styles.applyBtnText}>Apply Filters</Text>
-                        </TouchableOpacity>
+                        <View style={styles.modalActionRow}>
+                            <TouchableOpacity style={styles.resetBtn} onPress={resetFilters}>
+                                <Text style={styles.resetBtnText}>Reset</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.applyBtn} onPress={applyFilters}>
+                                <Text style={styles.applyBtnText}>Apply</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             </Modal>
@@ -369,12 +406,15 @@ const styles = StyleSheet.create({
     kpiTitle: { fontSize: 11, fontFamily: typography.medium, color: colors.textSecondary, marginBottom: 8 },
     kpiValue: { fontSize: 18, fontFamily: typography.bold, color: colors.text },
 
-    chartCard: { backgroundColor: colors.white, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg },
+    chartCard: { backgroundColor: colors.white, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.lg, minHeight: 200 },
     chartHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
     chartTitle: { fontSize: 14, fontFamily: typography.bold, color: colors.text },
     chartLegendRow: { flexDirection: "row", alignItems: "center" },
     legendDot: { width: 10, height: 10, borderRadius: 2, marginRight: 6 },
     legendText: { fontSize: 10, fontFamily: typography.medium, color: colors.textSecondary },
+
+    emptyStateContainer: { flex: 1, justifyContent: "center", alignItems: "center", paddingVertical: spacing.xxl },
+    emptyStateText: { marginTop: 12, fontSize: 13, fontFamily: typography.medium, color: colors.muted },
 
     tableHeaderRow: { flexDirection: "row", paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: 8 },
     tableHeaderText: { fontSize: 10, fontFamily: typography.bold, color: colors.muted },
@@ -395,6 +435,10 @@ const styles = StyleSheet.create({
     chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
     chipText: { fontSize: 13, fontFamily: typography.medium, color: colors.textSecondary },
     chipTextActive: { color: colors.white },
-    applyBtn: { backgroundColor: colors.primary, paddingVertical: 14, borderRadius: radius.md, alignItems: 'center', marginTop: spacing.lg },
+    
+    modalActionRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg },
+    resetBtn: { flex: 1, paddingVertical: 14, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
+    resetBtnText: { color: colors.text, fontSize: 16, fontFamily: typography.medium },
+    applyBtn: { flex: 1, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: radius.md, alignItems: "center" },
     applyBtnText: { color: colors.white, fontSize: 16, fontFamily: typography.bold },
 });

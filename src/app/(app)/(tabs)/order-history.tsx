@@ -3,11 +3,11 @@ import { Feather } from "@react-native-vector-icons/feather/static";
 import { Href, useRouter } from "expo-router";
 import React from "react";
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -110,22 +110,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   scrollContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xl,
   },
   header: {
     marginBottom: spacing.xl,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 20,
     fontFamily: typography.bold,
     color: colors.text,
-    marginBottom: 6,
+    paddingBottom:2
   },
   headerSubtitle: {
     fontSize: txtSize.small,
-    fontFamily: typography.regular,
+    fontFamily: typography.medium,
     color: colors.textSecondary,
     lineHeight: 20,
   },

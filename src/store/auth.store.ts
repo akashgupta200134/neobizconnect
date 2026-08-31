@@ -1,4 +1,5 @@
 import { validateToken } from "@/services/validateToken";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getItemAsync, setItemAsync } from "expo-secure-store";
 import { create } from "zustand";
 
@@ -47,12 +48,18 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 
-  clearSession: () => {
+  clearSession: async () => {
     set({
       accessToken: null,
       user: null,
       isAuthenticated: false,
     });
+
+    try {
+      await AsyncStorage.clear();
+    } catch (error) {
+      console.error("Failed to clear AsyncStorage on logout:", error);
+    }
   },
   hydrate: async () => {
     try {
