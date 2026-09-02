@@ -6,7 +6,6 @@ import { Feather } from "@react-native-vector-icons/feather";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
     Modal,
     Pressable,
     StyleSheet,
@@ -15,6 +14,7 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useDealerProducts } from "../hooks/use-products";
 import { SapProduct, StockFilterType, ViewMode } from "../types";
@@ -28,6 +28,8 @@ const SIZES = [
     { label: "16 Inch", value: "16" },
     { label: "17 Inch", value: "17" },
     { label: "18 Inch", value: "18" },
+    { label: "20 Inch", value: "20" },
+    { label: "22 Inch", value: "22" },
 ];
 
 const STOCK_OPTIONS: { label: string; value: StockFilterType }[] = [
@@ -42,22 +44,17 @@ export const DealerProductsScreen = () => {
     const [stockType, setStockType] = useState<StockFilterType>("inStock");
     const [wheelSize, setWheelSize] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState("");
-    const [viewMode, setViewMode] = useState<ViewMode>("grid");
+    const [viewMode, setViewMode] = useState<ViewMode>("table");
 
     const [brandModalVisible, setBrandModalVisible] = useState(false);
     const [stockModalVisible, setStockModalVisible] = useState(false);
     const [sizeModalVisible, setSizeModalVisible] = useState(false);
 
-    const { user } = useAuth()
-
+    const { user } = useAuth();
 
     useEffect(() => {
-        if (user?.dealer_brand_type) {
-            if (user.dealer_brand_type.length === 1) {
-                setSelectedBrand(user.dealer_brand_type[0]);
-            } else if (!selectedBrand) {
-                setBrandModalVisible(true);
-            }
+        if (user?.dealer_brand_type?.length && !selectedBrand) {
+            setSelectedBrand(user.dealer_brand_type[0]);
         }
     }, [user]);
 
@@ -85,20 +82,22 @@ export const DealerProductsScreen = () => {
 
     const selectedStockLabel = STOCK_OPTIONS.find((s) => s.value === stockType)?.label;
     const selectedSizeLabel = SIZES.find((s) => s.value === wheelSize)?.label;
+    const dealerBrands = user?.dealer_brand_type ?? [];
+    const hasMultipleBrands = dealerBrands.length > 1;
+    const selectedBrandLabel = selectedBrand || dealerBrands[0] || "—";
+
+    const showSkeleton = isLoading;
 
     const renderTableRow = ({ item }: { item: SapProduct }) => {
         const cartItem = cartItems.find((i) => i.id === item.id);
 
         return (
             <View style={styles.tableRow}>
-                {/* Left: Slightly larger image spanning the 2 lines */}
                 <View style={styles.imagePlaceholder}>
                     <Feather name="disc" size={28} color={colors.textSecondary} />
                 </View>
 
-                {/* Right: Content constrained to exactly 2 lines */}
                 <View style={styles.rowContent}>
-                    {/* Line 1: Name & Price */}
                     <View style={styles.rowLineOne}>
                         <Text style={styles.productName} numberOfLines={1}>
                             {item.itemName}
@@ -108,7 +107,6 @@ export const DealerProductsScreen = () => {
                         </Text>
                     </View>
 
-                    {/* Line 2: Code, Badges & Action */}
                     <View style={styles.rowLineTwo}>
                         <View style={styles.badgesContainer}>
                             <Text style={styles.productCode}>{item.itemCode}</Text>
@@ -212,15 +210,15 @@ export const DealerProductsScreen = () => {
 
     return (
         <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-            {/* Top Filter Bar */}
+            {/* Compact Top Filter Bar */}
             <View style={styles.filterSection}>
-                <View style={styles.searchContainer}>
-                    <Text style={styles.filterLabel}>Search</Text>
+                {/* Row 1: Search and Cart */}
+                <View style={styles.searchAndCartRow}>
                     <View style={styles.searchInputWrapper}>
                         <Feather name="search" size={16} color={colors.muted} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search by product name or item code..."
+                            placeholder="Search by product or code..."
                             placeholderTextColor={colors.muted}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -228,95 +226,98 @@ export const DealerProductsScreen = () => {
                             autoCorrect={false}
                         />
                         {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
-                                <Feather name="x" size={16} color={colors.muted} />
+                            <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={12}>
+                                <Feather name="x-circle" size={16} color={colors.muted} />
                             </TouchableOpacity>
                         )}
                     </View>
-                </View>
-                <View style={styles.dropdownRow}>
-                    <View style={styles.dropdownContainer}>
-                        <Text style={styles.filterLabel}>Stock</Text>
-                        <TouchableOpacity
-                            style={styles.dropdownTrigger}
-                            onPress={() => setStockModalVisible(true)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={styles.dropdownValueText} numberOfLines={1}>
-                                {selectedStockLabel}
-                            </Text>
-                            <Feather name="chevron-down" size={16} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
 
-                    <View style={styles.dropdownContainer}>
-                        <Text style={styles.filterLabel}>Size</Text>
-                        <TouchableOpacity
-                            style={styles.dropdownTrigger}
-                            onPress={() => setSizeModalVisible(true)}
-                            activeOpacity={0.7}
-                        >
-                            <Feather name="tag" size={14} color={colors.primary} />
-                            <Text style={styles.dropdownValueText} numberOfLines={1}>
-                                {selectedSizeLabel}
-                            </Text>
-                            <Feather name="chevron-down" size={16} color={colors.textSecondary} />
-                        </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                        style={styles.cartButton}
+                        activeOpacity={0.8}
+                        onPress={() => router.push("/cart")}
+                    >
+                        <Feather name="shopping-cart" size={18} color={colors.white} />
+                        {cartItems.length > 0 && (
+                            <View style={styles.cartBadge}>
+                                <Text style={styles.cartBadgeText}>{cartItems.length}</Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
                 </View>
-                <View style={styles.controlRow}>
+
+                {/* Row 2: Toggles and Filters */}
+                <View style={styles.filtersRow}>
                     <View style={styles.viewToggleGroup}>
-                        <TouchableOpacity
-                            style={[styles.toggleBtn, viewMode === "grid" && styles.toggleBtnActive]}
-                            onPress={() => setViewMode("grid")}
-                        >
-                            <Feather
-                                name="grid"
-                                size={18}
-                                color={viewMode === "grid" ? colors.white : colors.textSecondary}
-                            />
-                        </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.toggleBtn, viewMode === "table" && styles.toggleBtnActive]}
                             onPress={() => setViewMode("table")}
                         >
                             <Feather
                                 name="list"
-                                size={18}
+                                size={14}
                                 color={viewMode === "table" ? colors.white : colors.textSecondary}
+                            />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.toggleBtn, viewMode === "grid" && styles.toggleBtnActive]}
+                            onPress={() => setViewMode("grid")}
+                        >
+                            <Feather
+                                name="grid"
+                                size={14}
+                                color={viewMode === "grid" ? colors.white : colors.textSecondary}
                             />
                         </TouchableOpacity>
                     </View>
 
-                    <View style={styles.rightActions}>
-                        <TouchableOpacity
-                            style={styles.resetButton}
-                            onPress={handleReset}
-                            activeOpacity={0.7}
-                        >
-                            <Feather name="rotate-ccw" size={14} color={colors.text} />
-                            <Text style={styles.resetButtonText}>Reset</Text>
-                        </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.compactDropdown, !hasMultipleBrands && styles.compactDropdownDisabled]}
+                        onPress={() => hasMultipleBrands && setBrandModalVisible(true)}
+                        activeOpacity={hasMultipleBrands ? 0.7 : 1}
+                    >
+                        <Text style={styles.compactDropdownText} numberOfLines={1}>
+                            {selectedBrandLabel}
+                        </Text>
+                        {hasMultipleBrands && <Feather name="chevron-down" size={12} color={colors.muted} />}
+                    </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={styles.cartButton}
-                            activeOpacity={0.8}
-                            onPress={() => router.push("/cart")}
-                        >
-                            <Feather name="shopping-cart" size={16} color={colors.white} />
-                            <Text style={styles.cartButtonText}>
-                                Cart {cartItems.length > 0 ? `(${cartItems.length})` : ""}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                        style={styles.compactDropdown}
+                        onPress={() => setStockModalVisible(true)}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.compactDropdownText} numberOfLines={1}>
+                            {selectedStockLabel === "In Stock" ? "Stock" : selectedStockLabel}
+                        </Text>
+                        <Feather name="chevron-down" size={12} color={colors.muted} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.compactDropdown}
+                        onPress={() => setSizeModalVisible(true)}
+                        activeOpacity={0.7}
+                    >
+                        <Feather name="tag" size={10} color={colors.primary} />
+                        <Text style={styles.compactDropdownText} numberOfLines={1}>
+                            {selectedSizeLabel === "All Sizes" ? "Size" : selectedSizeLabel}
+                        </Text>
+                        <Feather name="chevron-down" size={12} color={colors.muted} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={styles.resetButtonIcon}
+                        onPress={handleReset}
+                        activeOpacity={0.7}
+                    >
+                        <Feather name="rotate-ccw" size={14} color={colors.text} />
+                    </TouchableOpacity>
                 </View>
             </View>
 
             {/* Main Content */}
-            {isLoading ? (
-                <View style={styles.centerBox}>
-                    <ActivityIndicator size="large" color={colors.primary} />
-                </View>
+            {showSkeleton ? (
+                <SkeletonProductList viewMode={viewMode} />
             ) : filteredProducts.length === 0 ? (
                 <View style={styles.centerBox}>
                     <Feather name="inbox" size={48} color={colors.muted} />
@@ -340,7 +341,7 @@ export const DealerProductsScreen = () => {
                 />
             )}
 
-            {/* Stock Selection Modal */}
+            {/* Modals remain exactly the same */}
             <Modal visible={stockModalVisible} transparent animationType="fade">
                 <Pressable style={styles.modalOverlay} onPress={() => setStockModalVisible(false)}>
                     <View style={styles.modalCard}>
@@ -407,7 +408,6 @@ export const DealerProductsScreen = () => {
                 </View>
             </Modal>
 
-            {/* Size Selection Modal */}
             <Modal visible={sizeModalVisible} transparent animationType="fade">
                 <Pressable style={styles.modalOverlay} onPress={() => setSizeModalVisible(false)}>
                     <View style={styles.modalCard}>
@@ -444,6 +444,96 @@ export const DealerProductsScreen = () => {
     );
 };
 
+// ---- Skeleton loading state (initial fetch + pull-to-refresh) ----
+
+const SkeletonBlock = ({ style }: { style?: any }) => {
+    const pulse = useSharedValue(0.55);
+
+    useEffect(() => {
+        pulse.value = withRepeat(
+            withSequence(
+                withTiming(1, { duration: 750 }),
+                withTiming(0.55, { duration: 750 })
+            ),
+            -1,
+            true
+        );
+    }, []);
+
+    const rStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+    return <Animated.View style={[styles.skeletonBlock, style, rStyle]} />;
+};
+
+const SkeletonTableRow = () => (
+    <View style={styles.tableRow}>
+        <SkeletonBlock style={{ width: 48, height: 48, borderRadius: radius.sm }} />
+        <View style={styles.rowContent}>
+            <View style={styles.rowLineOne}>
+                <SkeletonBlock style={{ flex: 1, height: 14, borderRadius: 4, marginRight: spacing.sm }} />
+                <SkeletonBlock style={{ width: 55, height: 14, borderRadius: 4 }} />
+            </View>
+            <View style={styles.rowLineTwo}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: 1, paddingRight: 8 }}>
+                    <SkeletonBlock style={{ width: 45, height: 14, borderRadius: 4 }} />
+                    <SkeletonBlock style={{ width: 34, height: 16, borderRadius: radius.sm }} />
+                    <SkeletonBlock style={{ width: 72, height: 16, borderRadius: radius.xl }} />
+                </View>
+                <SkeletonBlock style={{ width: 60, height: 30, borderRadius: radius.sm }} />
+            </View>
+        </View>
+    </View>
+);
+
+const SkeletonGridCard = () => (
+    <View style={styles.gridCard}>
+        <View style={styles.cardHeader}>
+            <SkeletonBlock style={{ width: 36, height: 16, borderRadius: radius.sm }} />
+        </View>
+
+        <SkeletonBlock style={{ height: 90, borderRadius: radius.md, marginVertical: spacing.xs }} />
+
+        <SkeletonBlock style={{ width: "90%", height: 12, borderRadius: 4, marginTop: 4 }} />
+        <SkeletonBlock style={{ width: "55%", height: 10, borderRadius: 4, marginTop: 6, marginBottom: 8 }} />
+
+        <SkeletonBlock style={{ width: 76, height: 16, borderRadius: radius.xl, marginBottom: 8 }} />
+
+        <SkeletonBlock style={{ width: "45%", height: 14, borderRadius: 4, marginBottom: 10 }} />
+
+        <SkeletonBlock style={{ height: 38, borderRadius: radius.md }} />
+    </View>
+);
+
+const SkeletonProductList = ({ viewMode, count = 6 }: { viewMode: ViewMode; count?: number }) => {
+    if (viewMode === "grid") {
+        const pairs: number[][] = [];
+        for (let i = 0; i < count; i += 2) pairs.push([i, i + 1]);
+
+        return (
+            <View style={styles.listContainer}>
+                {pairs.map((pair, idx) => (
+                    <View key={idx} style={{ flexDirection: "row" }}>
+                        <View style={{ flex: 1 }}>
+                            <SkeletonGridCard />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            {pair[1] < count && <SkeletonGridCard />}
+                        </View>
+                    </View>
+                ))}
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.listContainer}>
+            {Array.from({ length: count }).map((_, i) => (
+                <SkeletonTableRow key={i} />
+            ))}
+        </View>
+    );
+};
+
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
@@ -456,41 +546,13 @@ const styles = StyleSheet.create({
         borderBottomColor: colors.border,
         gap: spacing.sm,
     },
-    dropdownRow: {
+    // --- New Compact Layout Styles ---
+    searchAndCartRow: {
         flexDirection: "row",
         gap: spacing.sm,
     },
-    dropdownContainer: {
-        flex: 1,
-    },
-    filterLabel: {
-        fontSize: txtSize.xs,
-        fontFamily: typography.medium,
-        color: colors.textSecondary,
-        marginBottom: 4,
-    },
-    dropdownTrigger: {
-        height: 40,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingHorizontal: spacing.sm,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.md,
-        backgroundColor: colors.surface,
-        gap: 6,
-    },
-    dropdownValueText: {
-        flex: 1,
-        fontSize: txtSize.small,
-        fontFamily: typography.medium,
-        color: colors.text,
-    },
-    searchContainer: {
-        width: "100%",
-    },
     searchInputWrapper: {
+        flex: 1,
         height: 40,
         flexDirection: "row",
         alignItems: "center",
@@ -508,64 +570,86 @@ const styles = StyleSheet.create({
         color: colors.text,
         padding: 0,
     },
-    controlRow: {
+    cartButton: {
+        width: 44,
+        height: 40,
+        borderRadius: radius.md,
+        backgroundColor: colors.primary,
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+    },
+    cartBadge: {
+        position: "absolute",
+        top: -6,
+        right: -6,
+        backgroundColor: "#EF4444", // Red badge
+        borderRadius: 10,
+        minWidth: 18,
+        height: 18,
+        justifyContent: "center",
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: colors.white,
+    },
+    cartBadgeText: {
+        color: colors.white,
+        fontSize: 9,
+        fontFamily: typography.bold,
+    },
+    filtersRow: {
         flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
-        marginTop: 4,
+        gap: 6,
     },
     viewToggleGroup: {
         flexDirection: "row",
         borderWidth: 1,
         borderColor: colors.border,
-        borderRadius: radius.md,
+        borderRadius: radius.sm,
         overflow: "hidden",
     },
     toggleBtn: {
-        paddingVertical: 6,
-        paddingHorizontal: 12,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
         backgroundColor: colors.surface,
     },
     toggleBtnActive: {
         backgroundColor: colors.primary,
     },
-    rightActions: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.sm,
-    },
-    resetButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        height: 34,
-        paddingHorizontal: spacing.md,
-        borderRadius: radius.md,
-        borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.white,
-        gap: 6,
-    },
-    resetButtonText: {
-        fontSize: txtSize.xs,
-        fontFamily: typography.medium,
-        color: colors.text,
-    },
-    cartButton: {
+    compactDropdown: {
+        flex: 1,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        height: 34,
-        paddingHorizontal: spacing.md,
-        borderRadius: radius.md,
-        backgroundColor: colors.primary,
-        gap: 6,
-        minWidth: 90
+        gap: 4,
+        height: 32,
+        paddingHorizontal: 4,
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.sm,
     },
-    cartButtonText: {
-        fontSize: txtSize.xs,
-        fontFamily: typography.bold,
-        color: colors.white,
+    compactDropdownDisabled: {
+        opacity: 0.6,
+        backgroundColor: colors.background,
     },
+    compactDropdownText: {
+        fontSize: 11,
+        fontFamily: typography.medium,
+        color: colors.text,
+    },
+    resetButtonIcon: {
+        height: 32,
+        width: 32,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: colors.white,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.sm,
+    },
+    // ---------------------------------
     listContainer: {
         padding: spacing.md,
         gap: spacing.sm,
@@ -578,7 +662,7 @@ const styles = StyleSheet.create({
         borderRadius: radius.md,
         borderWidth: 1,
         borderColor: colors.border,
-        gap: spacing.md, // Increased gap from image
+        gap: spacing.md,
     },
     imagePlaceholder: {
         width: 48,
@@ -590,7 +674,7 @@ const styles = StyleSheet.create({
     },
     rowContent: {
         flex: 1,
-        gap: 8, // Space between Line 1 and Line 2
+        gap: 8,
     },
     rowLineOne: {
         flexDirection: "row",
@@ -602,10 +686,6 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-    },
-    productInfo: {
-        flex: 1,
-        marginHorizontal: 4,
     },
     badgesContainer: {
         flexDirection: "row",
@@ -815,6 +895,9 @@ const styles = StyleSheet.create({
     modalOptionTextSelected: {
         fontFamily: typography.bold,
         color: colors.primary,
+    },
+    skeletonBlock: {
+        backgroundColor: colors.border,
     },
 });
 

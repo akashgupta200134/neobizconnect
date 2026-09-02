@@ -1,58 +1,68 @@
 import { api } from "@/services/axios";
 import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
-import { InvoiceStats, PaginatedInvoiceResponse } from "../types";
 
+// 1. Fetch Stats
+export const fetchArInvoiceStats = async (groupCompanyName: string) => {
+  const response = await api.get(`/Neo/Invoice/Count/Data`);
+  return response.data;
+};
+
+// 2. Fetch Paginated List
 export const fetchArInvoices = async (
   groupCompanyName: string,
-  page: number = 0,
-  size: number = 10,
-): Promise<PaginatedInvoiceResponse> => {
-  const res = await api.get(`/${groupCompanyName}/Invoice/List/Pagenation`, {
-    params: { page, size },
-  });
-  return res.data;
-};
-
-export const fetchArInvoiceStats = async (
-  groupCompanyName: string,
-): Promise<InvoiceStats> => {
-  const res = await api.get(`/${groupCompanyName}/Invoice/Count/Data`);
-  return res.data;
-};
-
-export const downloadAndOpenInvoicePdf = async (
-  groupCompanyName: string,
-  invoiceDocEntry: string,
+  page: number,
 ) => {
-  // 1. Fetch the raw binary data
-  const response = await api.post(
-    `/${groupCompanyName}/SAP/InvoicePDF`,
-    { DocEntry: invoiceDocEntry },
-    { responseType: "arraybuffer" },
-  );
+  const response = await api.get(`/Neo/Invoice/List/Pagenation?page=${page}`);
+  return response.data;
+};
 
-  // 2. Create the file reference in the cache directory
-  const file = new File(Paths.cache, `Invoice_${invoiceDocEntry}.pdf`);
+// 3. Robust PDF Downloader
+export const downloadInvoicePdf = async (
+  groupCompanyName: string,
+  docEntry: string,
+): Promise<string> => {
+  try {
+    const response = await api.post(
+      `/Neo/SAP/InvoicePDF`,
+      { DocEntry: docEntry },
+      {
+        responseType: "arraybuffer",
+        // Prevent Axios from throwing immediately on 4xx/5xx so we can parse the binary error
+        validateStatus: (status) => status < 500,
+      },
+    );
 
-  // 3. Prevent the "already exists" crash by deleting the old cache file
-  if (file.exists) {
-    file.delete();
-  }
+    // Intercept JSON errors hidden inside the ArrayBuffer
+    const contentType = response.headers["content-type"] || "";
+    if (contentType.includes("application/json")) {
+      const textDecoder = new TextDecoder("utf-8");
+      const errorText = textDecoder.decode(new Uint8Array(response.data));
+      const errorJson = JSON.parse(errorText);
+      throw new Error(
+        errorJson.message || "Server returned JSON instead of a PDF.",
+      );
+    }
 
-  // 4. Create the empty file and write the raw binary bytes directly
-  file.create();
-  file.write(new Uint8Array(response.data));
+    // Validate successful HTTP status
+    if (response.status !== 200) {
+      throw new Error(
+        `Failed to download PDF. HTTP Status: ${response.status}`,
+      );
+    }
 
-  // 5. Hand the file off to the operating system
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (isAvailable) {
-    await Sharing.shareAsync(file.uri, {
-      mimeType: "application/pdf",
-      dialogTitle: `View Invoice ${invoiceDocEntry}`,
-      UTI: "com.adobe.pdf", // Helps the OS prioritize PDF viewer apps in the menu
-    });
-  } else {
-    throw new Error("Sharing is not available on this device");
+    // Safely manage the file system
+    const file = new File(Paths.cache, `Invoice_${docEntry}.pdf`);
+
+    if (file.exists) {
+      file.delete();
+    }
+
+    file.create();
+    file.write(new Uint8Array(response.data));
+
+    return file.uri;
+  } catch (error) {
+    console.error(`[downloadInvoicePdf] Error:`, error);
+    throw error;
   }
 };

@@ -1,3 +1,4 @@
+import { PdfViewerModal } from "@/components/shared/pdf-viewer-modal";
 import { colors, radius, spacing, txtSize, typography } from "@/constants/theme";
 import { downloadAndOpenLedgerPdf, fetchCustomerLedger } from "@/modules/customer-ledger/services/customer-ledger.api";
 import { LedgerEntry } from "@/modules/customer-ledger/types";
@@ -7,7 +8,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -19,6 +20,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function CustomerLedgerScreen() {
@@ -39,6 +41,7 @@ export default function CustomerLedgerScreen() {
 
   // PDF Loader State
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [pdfUri, setPdfUri] = useState<string | null>(null);
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ["customer-ledger", groupCompanyName, appliedFromDate, appliedToDate],
@@ -46,13 +49,16 @@ export default function CustomerLedgerScreen() {
     enabled: Boolean(groupCompanyName),
   });
 
-  const { mutate: handleDownloadPdf } = useMutation({
+  const { mutate: handleDownloadPdf, isPending: pdfDownloadPending } = useMutation({
     mutationFn: (docEntry: string) => downloadAndOpenLedgerPdf(groupCompanyName, docEntry),
     onMutate: (docEntry) => setDownloadingId(docEntry),
-    onSuccess: () => setDownloadingId(null),
+    onSuccess: (uri) => {
+      setDownloadingId(null);
+      setPdfUri(uri); // Open the viewer modal with the downloaded URI
+    },
     onError: (error) => {
       setDownloadingId(null);
-      if (Platform.OS === "android") ToastAndroid.show("Failed to open PDF", ToastAndroid.SHORT);
+      if (Platform.OS === "android") ToastAndroid.show("Failed to download PDF", ToastAndroid.SHORT);
       console.error(error);
     },
   });
@@ -149,14 +155,14 @@ export default function CustomerLedgerScreen() {
           <TouchableOpacity
             style={styles.pdfButton}
             activeOpacity={0.8}
-            onPress={() => handleDownloadPdf(item.OriginDocEntry)}
-            disabled={isDownloading}
+            onPress={() => handleDownloadPdf(item.OriginDocEntry!)}
+            disabled={pdfDownloadPending || isDownloading}
           >
             {isDownloading ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <>
-                <Feather name="file-text" size={16} color={colors.primary} />
+                <Feather name="file-text" size={18} color={colors.primary} />
                 <Text style={styles.pdfButtonText}>View Invoice</Text>
               </>
             )}
@@ -209,9 +215,7 @@ export default function CustomerLedgerScreen() {
 
       {/* List */}
       {isLoading ? (
-        <View style={styles.centerBox}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
+        <SkeletonCardList />
       ) : filteredData.length === 0 ? (
         <View style={styles.centerBox}>
           <Feather name="file-minus" size={48} color={colors.muted} />
@@ -228,6 +232,7 @@ export default function CustomerLedgerScreen() {
           onRefresh={refetch}
           refreshing={isRefetching}
           recycleItems={true}
+          extraData={downloadingId}
         />
       )}
 
@@ -281,9 +286,74 @@ export default function CustomerLedgerScreen() {
           maximumDate={new Date()}
         />
       )}
+
+      {/* Reusable PDF Modal */}
+      <PdfViewerModal 
+        visible={Boolean(pdfUri)}
+        uri={pdfUri}
+        title="Ledger Document"
+        onClose={() => setPdfUri(null)}
+      />
     </SafeAreaView>
   );
 }
+
+// ---- Skeleton loading state (initial ledger fetch) ----
+
+const SkeletonBlock = ({ style }: { style?: any }) => {
+  const pulse = useSharedValue(0.55);
+
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 750 }),
+        withTiming(0.55, { duration: 750 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const rStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+  return <Animated.View style={[styles.skeletonBlock, style, rStyle]} />;
+};
+
+const SkeletonCard = () => (
+  <View style={styles.card}>
+    <View style={styles.cardHeader}>
+      <View>
+        <SkeletonBlock style={{ width: 100, height: 15, borderRadius: 4, marginBottom: 6 }} />
+        <SkeletonBlock style={{ width: 70, height: 12, borderRadius: 4 }} />
+      </View>
+      <SkeletonBlock style={{ width: 78, height: 22, borderRadius: radius.xl }} />
+    </View>
+
+    <View style={styles.detailsBlock}>
+      <SkeletonBlock style={{ width: 50, height: 11, borderRadius: 4, marginBottom: 6 }} />
+      <SkeletonBlock style={{ width: "85%", height: 13, borderRadius: 4 }} />
+    </View>
+
+    <View style={styles.financialRow}>
+      {[0, 1, 2].map(i => (
+        <View key={i} style={styles.finCol}>
+          <SkeletonBlock style={{ width: 40, height: 10, borderRadius: 3, marginBottom: 6 }} />
+          <SkeletonBlock style={{ width: 55, height: 13, borderRadius: 3 }} />
+        </View>
+      ))}
+    </View>
+
+    <SkeletonBlock style={{ height: 38, borderRadius: radius.sm, marginTop: spacing.md }} />
+  </View>
+);
+
+const SkeletonCardList = ({ count = 6 }: { count?: number }) => (
+  <View style={styles.listContent}>
+    {Array.from({ length: count }).map((_, i) => (
+      <SkeletonCard key={i} />
+    ))}
+  </View>
+);
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.surface },
@@ -328,6 +398,8 @@ const styles = StyleSheet.create({
 
   pdfButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#EFF6FF", paddingVertical: 10, borderRadius: radius.sm, borderWidth: 1, borderColor: "#BFDBFE", marginTop: spacing.md },
   pdfButtonText: { fontSize: txtSize.small, fontFamily: typography.bold, color: colors.primary },
+
+  skeletonBlock: { backgroundColor: colors.border },
 
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: spacing.lg },

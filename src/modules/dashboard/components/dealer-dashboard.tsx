@@ -6,8 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { ActivityIndicator, Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from "react-native-reanimated";
+import { Modal, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BarGroup, CartesianChart } from "victory-native";
 import { fetchDashboardData } from "../services/dashboard.api";
@@ -50,6 +50,90 @@ const EmptyChartState = ({ icon = "bar-chart-2" }: { icon?: string }) => (
     </View>
 );
 
+// ---- Skeleton loading state ----
+
+const SkeletonBlock = ({ style }: { style?: any }) => {
+    const pulse = useSharedValue(0.40);
+
+    React.useEffect(() => {
+        pulse.value = withRepeat(
+            withSequence(
+                withTiming(1, { duration: 750 }),
+                withTiming(0.40, { duration: 750 })
+            ),
+            -1,
+            true
+        );
+    }, []);
+
+    const rStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+    return <Animated.View style={[styles.skeletonBlock, style, rStyle]} />;
+};
+
+const SkeletonKPICard = () => (
+    <View style={styles.kpiCard}>
+        <SkeletonBlock style={{ width: "65%", height: 11, borderRadius: 4, marginBottom: 10 }} />
+        <SkeletonBlock style={{ width: "45%", height: 18, borderRadius: 4 }} />
+    </View>
+);
+
+const SKELETON_BAR_HEIGHTS = [70, 130, 55, 95, 35, 120, 65];
+
+const SkeletonBarChartCard = () => (
+    <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+            <SkeletonBlock style={{ width: 150, height: 14, borderRadius: 4 }} />
+            <SkeletonBlock style={{ width: 90, height: 12, borderRadius: 4 }} />
+        </View>
+        <View style={styles.skeletonChartArea}>
+            {SKELETON_BAR_HEIGHTS.map((h, i) => (
+                <View key={i} style={styles.skeletonBarPair}>
+                    <SkeletonBlock style={{ width: 12, height: h, borderRadius: 3 }} />
+                    <SkeletonBlock style={{ width: 12, height: h * 0.75, borderRadius: 3 }} />
+                </View>
+            ))}
+        </View>
+    </View>
+);
+
+const SkeletonBarListRow = () => (
+    <View style={styles.tableRow}>
+        <SkeletonBlock style={{ flex: 2, height: 12, borderRadius: 4, marginRight: 8 }} />
+        <SkeletonBlock style={{ flex: 1.5, height: 20, borderRadius: 4 }} />
+    </View>
+);
+
+const SkeletonBarListCard = ({ rows = 4 }: { rows?: number }) => (
+    <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+            <SkeletonBlock style={{ width: 140, height: 14, borderRadius: 4 }} />
+        </View>
+        <View style={[styles.tableHeaderRow, { gap: 8 }]}>
+            <SkeletonBlock style={{ flex: 2, height: 9, borderRadius: 3 }} />
+            <SkeletonBlock style={{ flex: 1, height: 9, borderRadius: 3 }} />
+        </View>
+        {Array.from({ length: rows }).map((_, i) => (
+            <SkeletonBarListRow key={i} />
+        ))}
+    </View>
+);
+
+const DashboardBodySkeleton = () => (
+    <>
+        <View style={styles.kpiGrid}>
+            {Array.from({ length: 8 }).map((_, i) => (
+                <SkeletonKPICard key={i} />
+            ))}
+        </View>
+
+        <SkeletonBarChartCard />
+        <SkeletonBarListCard rows={4} />
+        <SkeletonBarListCard rows={4} />
+        <SkeletonBarListCard rows={3} />
+    </>
+);
+
 // Helper to calculate dynamic initial filters
 const getInitialFilters = () => {
     const today = new Date();
@@ -60,7 +144,7 @@ const getInitialFilters = () => {
 
     return {
         financial_year: currentFY,
-        month: currentMonth,
+        month: "" // Default to no month filter,
     };
 };
 
@@ -116,13 +200,7 @@ export const DashboardScreen = () => {
         return filters.month || filters.financial_year;
     };
 
-    if (isLoading || !data || !font) {
-        return (
-            <SafeAreaView style={[styles.safeArea, styles.centerBox]}>
-                <ActivityIndicator size="large" color={colors.primary} />
-            </SafeAreaView>
-        );
-    }
+    const showSkeleton = isLoading || !data || !font;
 
     const KPICard = ({ title, value, isCurrency = false }: { title: string; value: number; isCurrency?: boolean }) => (
         <View style={styles.kpiCard}>
@@ -217,6 +295,10 @@ export const DashboardScreen = () => {
                     </View>
                 </View>
 
+                {showSkeleton ? (
+                    <DashboardBodySkeleton />
+                ) : (
+                <>
                 <View style={styles.kpiGrid}>
                     <KPICard title="Total Pending Qty" value={data.total_pending_quantity} />
                     <KPICard title="Total PI/OIP Qty" value={data.total_pi_oip_quantity} />
@@ -345,6 +427,8 @@ export const DashboardScreen = () => {
                     percentKey="sales_mix_percentage"
                     icon="pie-chart"
                 />
+                </>
+                )}
 
             </ScrollView>
 
@@ -411,16 +495,15 @@ export const DashboardScreen = () => {
 
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: colors.background },
-    centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
     scrollContent: { padding: spacing.md, paddingBottom: spacing.xxl },
 
-    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.lg },
+    header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md },
     headerTitle: { fontSize: 24, fontFamily: typography.bold, color: colors.text },
     headerSubtitle: { fontSize: txtSize.small, fontFamily: typography.medium, color: colors.textSecondary, marginTop: 2 },
     headerActions: { flexDirection: "row", gap: spacing.sm },
     headerBtn: { padding: 10, backgroundColor: colors.white, borderRadius: radius.xl, borderWidth: 1, borderColor: colors.border },
 
-    kpiGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: spacing.lg },
+    kpiGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
     kpiCard: { width: "48%", backgroundColor: colors.white, padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
     kpiTitle: { fontSize: 11, fontFamily: typography.medium, color: colors.textSecondary, marginBottom: 8 },
     kpiValue: { fontSize: 18, fontFamily: typography.bold, color: colors.text },
@@ -460,4 +543,8 @@ const styles = StyleSheet.create({
     resetBtnText: { color: colors.text, fontSize: 16, fontFamily: typography.medium },
     applyBtn: { flex: 1, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: radius.md, alignItems: "center" },
     applyBtnText: { color: colors.white, fontSize: 16, fontFamily: typography.bold },
+
+    skeletonBlock: { backgroundColor: colors.border },
+    skeletonChartArea: { height: 300, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-around", paddingHorizontal: spacing.sm, paddingBottom: spacing.lg },
+    skeletonBarPair: { flexDirection: "row", alignItems: "flex-end", gap: 4 },
 });

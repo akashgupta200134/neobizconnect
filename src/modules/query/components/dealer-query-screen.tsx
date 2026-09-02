@@ -40,7 +40,7 @@ export const DealerQueryScreen = () => {
     const queryClient = useQueryClient();
     const user = useAuthStore((state) => state.user);
     const groupCompanyName = user?.group_company_name || "Neo";
-    
+
     // Check role/authority to conditionally render inputs
     const isDealer = user?.authority === "Dealer";
 
@@ -204,6 +204,7 @@ export const DealerQueryScreen = () => {
                         showsVerticalScrollIndicator={false}
                         onRefresh={refetch}
                         refreshing={isRefetching}
+                        recycleItems={true}
                     />
                 )
             ) : (
@@ -256,14 +257,14 @@ export const DealerQueryScreen = () => {
                                 render={({ field: { onChange, value } }) => (
                                     <View style={styles.inputGroup}>
                                         <Text style={styles.inputLabel}>Remarks</Text>
-                                        <TextInput 
-                                            style={[styles.input, styles.textArea]} 
+                                        <TextInput
+                                            style={[styles.input, styles.textArea]}
                                             placeholder="Enter remarks"
                                             placeholderTextColor={colors.muted}
-                                            multiline 
-                                            textAlignVertical="top" 
-                                            value={value} 
-                                            onChangeText={onChange} 
+                                            multiline
+                                            textAlignVertical="top"
+                                            value={value}
+                                            onChangeText={onChange}
                                         />
                                     </View>
                                 )}
@@ -396,9 +397,9 @@ export const DealerQueryScreen = () => {
 const styles = StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: colors.surface },
     centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
-    header: { flexDirection: "column", alignItems: "flex-start", justifyContent:"center", padding: spacing.md, backgroundColor: colors.white },
+    header: { flexDirection: "column", alignItems: "flex-start", justifyContent: "center", padding: spacing.md, backgroundColor: colors.white },
     backButton: { padding: 4, marginRight: spacing.sm },
-    headerTitle: { fontSize: 20, fontFamily: typography.bold, color: colors.text,paddingBottom:2 },
+    headerTitle: { fontSize: 20, fontFamily: typography.bold, color: colors.text, paddingBottom: 2 },
     headerSubTitle: { fontSize: txtSize.small, fontFamily: typography.medium, color: colors.textSecondary },
     tabContainer: { flexDirection: "row", backgroundColor: colors.surface, padding: spacing.sm, marginHorizontal: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm },
     tabBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingVertical: 10, borderRadius: radius.sm },

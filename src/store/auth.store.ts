@@ -1,6 +1,6 @@
 import { validateToken } from "@/services/validateToken";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getItemAsync, setItemAsync } from "expo-secure-store";
+import { deleteItemAsync, getItemAsync, setItemAsync } from "expo-secure-store";
 import { create } from "zustand";
 
 export type BrandType = "Neo" | "Zetta";
@@ -56,6 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
 
     try {
+      await deleteItemAsync("accessToken");
       await AsyncStorage.clear();
     } catch (error) {
       console.error("Failed to clear AsyncStorage on logout:", error);

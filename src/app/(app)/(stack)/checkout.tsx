@@ -1,9 +1,9 @@
 import { CheckoutScreen } from '@/modules/sales-order/components/checkout-screen'
 
-const checkout = () => {
+const CheckoutRoute = () => {
     return (
         <CheckoutScreen />
   )
 }
 
-export default checkout
+export default CheckoutRoute

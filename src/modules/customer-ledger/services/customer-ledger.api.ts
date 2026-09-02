@@ -1,6 +1,5 @@
 import { api } from "@/services/axios";
 import { File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { CustomerLedgerResponse } from "../types";
 
 export const fetchCustomerLedger = async (
@@ -12,10 +11,7 @@ export const fetchCustomerLedger = async (
   if (fromDate) params.fromDate = fromDate;
   if (toDate) params.toDate = toDate;
 
-  const res = await api.get(
-    `/${groupCompanyName}/SAP/GetAccountBalance/Dealer`,
-    { params },
-  );
+  const res = await api.get(`/Neo/SAP/GetAccountBalance/Dealer`, { params });
   return res.data;
 };
 
@@ -24,7 +20,7 @@ export const downloadAndOpenLedgerPdf = async (
   docEntry: string,
 ) => {
   const response = await api.post(
-    `/${groupCompanyName}/SAP/InvoicePDF`,
+    `/Neo/SAP/InvoicePDF`,
     { DocEntry: docEntry },
     { responseType: "arraybuffer" },
   );
@@ -38,14 +34,5 @@ export const downloadAndOpenLedgerPdf = async (
   file.create();
   file.write(new Uint8Array(response.data));
 
-  const isAvailable = await Sharing.isAvailableAsync();
-  if (isAvailable) {
-    await Sharing.shareAsync(file.uri, {
-      mimeType: "application/pdf",
-      dialogTitle: `Invoice ${docEntry}`,
-      UTI: "com.adobe.pdf", // iOS specific tag for PDF routing
-    });
-  } else {
-    throw new Error("Sharing is not available on this device");
-  }
+  return file.uri;
 };
